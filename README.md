@@ -15,12 +15,16 @@ This is an independent project. It is not affiliated with, endorsed by or sponso
 
 ## Installation
 
+From Maven Central:
+
+<!-- x-release-please-start-version -->
 ```kotlin
 // build.gradle.kts
 dependencies {
     implementation("app.babyzzz.telemetrykit:telemetrykit:0.1.0")
 }
 ```
+<!-- x-release-please-end -->
 
 Until it is on a public repository, publish it locally with `./gradlew publishToMavenLocal` and add `mavenLocal()`.
 Requires JVM 17 bytecode (any Android app on AGP 8) and `java.time`: Android API 26+, or core library desugaring below that.
