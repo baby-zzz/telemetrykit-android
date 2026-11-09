@@ -21,7 +21,7 @@ From Maven Central:
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("app.babyzzz.telemetrykit:telemetrykit:0.2.0")
+    implementation("app.babyzzz.telemetrykit:telemetrykit:0.3.0")
 }
 ```
 <!-- x-release-please-end -->
