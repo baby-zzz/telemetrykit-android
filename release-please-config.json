@@ -7,7 +7,12 @@
     ".": {
       "package-name": "telemetrykit-android",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["gradle.properties", "src/main/kotlin/app/babyzzz/telemetrykit/Configuration.kt", "README.md"]
+      "extra-files": [
+        "gradle.properties",
+        "src/main/kotlin/app/babyzzz/telemetrykit/Configuration.kt",
+        "README.md"
+      ]
     }
-  }
+  },
+  "include-component-in-tag": false
 }
