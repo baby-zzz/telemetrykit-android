@@ -12,6 +12,8 @@ public class TelemetryScrub internal constructor(
     extraParameters: List<String>,
     extraPatterns: List<Regex>,
     available: Boolean,
+    // Runs last on every scrubbed string; tests make it throw to drive the fail-closed path deterministically
+    private val finalStep: (String) -> String = { it },
 ) {
     public constructor(
         extraParameters: List<String> = emptyList(),
@@ -44,7 +46,7 @@ public class TelemetryScrub internal constructor(
             out = out.replace(patterns.bearer) { "${it.groupValues[1]}$REDACTED" }
             if (out.contains('@')) out = out.replace(patterns.email, EMAIL_REDACTED)
             for (regex in patterns.extra) out = out.replace(regex, REDACTED)
-            out
+            finalStep(out)
         }.getOrDefault(REDACTED)
     }
 

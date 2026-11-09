@@ -127,6 +127,20 @@ class ScrubPolicyTest {
         assertEquals(mapOf("k" to TelemetryScrub.REDACTED), (item.scrubbed(boom, ScrubPolicy.NONE, scrub = true) as TelemetryItem.Event).event.attributes)
     }
 
+    @Test
+    fun `a scrub that throws while matching sends nothing of the text`() {
+        // Errors thrown on purpose, so the test never depends on the JVM's stack size or the regex engine
+        val failures = listOf<() -> Nothing>({ throw StackOverflowError() }, { throw IllegalStateException("matcher failed") })
+        val item = TelemetryItem.Log(FaroLog("failed for jane@example.com", FaroLog.Level.WARN, "t", mapOf("category" to "auth", "url" to "/x?token=1")))
+        for (failure in failures) {
+            val throwing = TelemetryScrub(emptyList(), emptyList(), available = true, finalStep = { failure() })
+            val log = (item.scrubbed(throwing) as TelemetryItem.Log).log
+            assertEquals(TelemetryScrub.REDACTED, log.message)
+            assertEquals(mapOf("category" to "auth", "url" to TelemetryScrub.REDACTED), log.context)
+            assertEquals(item, item.scrubbed(throwing, ScrubPolicy.NONE)) // nothing runs when the policy is off
+        }
+    }
+
     private suspend fun sent(
         scope: kotlinx.coroutines.CoroutineScope,
         policy: ScrubPolicy,
