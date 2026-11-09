@@ -117,8 +117,10 @@ class ScrubPolicyTest {
 
     @Test
     fun `scrubbing that runs still fails closed`() {
-        val boom = TelemetryScrub(extraPatterns = listOf(Regex("(x|y)*")))
-        val long = "xy".repeat(100_000)
+        // Deterministic: a scrub whose patterns are unavailable (a regex that overflows the stack depends on the JVM's
+        // stack size and hung the Linux CI agent)
+        val boom = TelemetryScrub.unavailable
+        val long = "jane@example.com and more"
         val item = TelemetryItem.Event(FaroEvent("e", "android", "t", mapOf("k" to long)))
         assertEquals(mapOf("k" to TelemetryScrub.REDACTED), (item.scrubbed(boom) as TelemetryItem.Event).event.attributes)
         assertEquals(mapOf("k" to long), (item.scrubbed(boom, ScrubPolicy.NONE) as TelemetryItem.Event).event.attributes)

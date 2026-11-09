@@ -8,10 +8,16 @@ package app.babyzzz.telemetrykit
  *
  * Fails closed: if a pattern cannot be built or throws, nothing of the text is sent.
  */
-public class TelemetryScrub(
-    extraParameters: List<String> = emptyList(),
-    extraPatterns: List<Regex> = emptyList(),
+public class TelemetryScrub internal constructor(
+    extraParameters: List<String>,
+    extraPatterns: List<Regex>,
+    available: Boolean,
 ) {
+    public constructor(
+        extraParameters: List<String> = emptyList(),
+        extraPatterns: List<Regex> = emptyList(),
+    ) : this(extraParameters, extraPatterns, available = true)
+
     internal class Patterns(extraParameters: List<String>, val extra: List<Regex>) {
         // ?name=value or &name=value up to the next &, #, quote or whitespace
         val parameter = Regex(
@@ -25,7 +31,7 @@ public class TelemetryScrub(
         val userInfo = Regex("([a-z][a-z0-9+.-]*://)[^/?#@\\s]+@", RegexOption.IGNORE_CASE)
     }
 
-    private val patterns: Patterns? = runCatching { Patterns(extraParameters, extraPatterns) }.getOrNull()
+    private val patterns: Patterns? = if (available) runCatching { Patterns(extraParameters, extraPatterns) }.getOrNull() else null
 
     /** The text with credentials in URLs, secret query values, bearer tokens and e-mail addresses replaced */
     public fun text(value: String): String = text(value, patterns)
@@ -54,5 +60,8 @@ public class TelemetryScrub(
 
         /** Only the defaults */
         public val default: TelemetryScrub = TelemetryScrub()
+
+        /** A scrub whose patterns could not be built: every string becomes [REDACTED] (tests of the fail-closed path) */
+        internal val unavailable: TelemetryScrub = TelemetryScrub(emptyList(), emptyList(), available = false)
     }
 }
