@@ -134,7 +134,12 @@ public object Telemetry {
     public fun onStop(): Unit = safely { client?.onStop() }
 
     /** The app is back (ProcessLifecycleOwner `ON_START`): what was written is still queued in memory, so the file goes */
-    public fun onStart(): Unit = safely { client?.foregrounded() }
+    public fun onStart(): Unit = safely {
+        // The app being active starts a session (session_start) when none is running, so sessions count people using
+        // the app, not only those with errors
+        client?.touchSession()
+        client?.foregrounded()
+    }
 
     // endregion
 

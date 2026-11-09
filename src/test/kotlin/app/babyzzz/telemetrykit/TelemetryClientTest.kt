@@ -89,6 +89,44 @@ class TelemetryClientTest {
     }
 
     @Test
+    fun `becoming active starts a session without other items`() = runTest {
+        val transport = RecordingTransport()
+        val clock = FakeClock()
+        val client = client(backgroundScope, transport, remote = RemoteGate.ENABLED, clock = clock)
+        client.touchSession()
+        client.touchSession() // same session: nothing more
+        assertEquals(1, client.pendingCount)
+        assertTrue(client.flush())
+        assertEquals(listOf("session_start"), transport.payloads().single().events?.map { it.name })
+        val first = transport.payloads().single().meta.session?.id
+
+        clock.millis += 10 * 60_000 // active within the timeout: same session, no event
+        client.touchSession()
+        assertEquals(0, client.pendingCount)
+        clock.millis += 14 * 60_000 // 14 min after the last touch: still running (the touch extended it)
+        client.record(event("e"))
+        assertTrue(client.flush())
+        assertEquals(listOf("e"), transport.payloads().last().events?.map { it.name })
+        assertEquals(first, transport.payloads().last().meta.session?.id)
+
+        clock.millis += 16 * 60_000 // after the timeout: a new session
+        client.touchSession()
+        assertTrue(client.flush())
+        assertEquals(listOf("session_start"), transport.payloads().last().events?.map { it.name })
+        assertFalse(first == transport.payloads().last().meta.session?.id)
+    }
+
+    @Test
+    fun `no session without consent or with the flag off`() = runTest {
+        val off = client(backgroundScope, remote = RemoteGate.DISABLED)
+        off.touchSession()
+        assertEquals(0, off.pendingCount)
+        val noConsent = client(backgroundScope, remote = RemoteGate.ENABLED, consent = false)
+        noConsent.touchSession()
+        assertEquals(0, noConsent.pendingCount)
+    }
+
+    @Test
     fun `sends one request per meta with session_start first`() = runTest {
         val transport = RecordingTransport()
         val client = client(backgroundScope, transport, remote = RemoteGate.ENABLED)

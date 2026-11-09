@@ -111,8 +111,20 @@ public class TelemetryClient(
 
     /** Queues [item]. [scrub] overrides [Configuration.scrubPolicy] for it: true scrubs every free string, false none, null follows the policy */
     public fun record(item: TelemetryItem, scrub: Boolean? = null) {
+        enqueue(item.scrubbed(configuration.scrub, configuration.scrubPolicy, scrub))
+    }
+
+    /**
+     * The app became active: counts as activity, so a session starts (`session_start`, nothing else) when none is
+     * running or the last one timed out, and a running one is extended. A no-op without consent or with the remote gate
+     * disabled, like recording.
+     */
+    public fun touchSession() {
+        enqueue(null)
+    }
+
+    private fun enqueue(clean: TelemetryItem?) {
         val date = now()
-        val clean = item.scrubbed(configuration.scrub, configuration.scrubPolicy, scrub)
         var flushIn: Long? = null
         var toSave: TelemetrySession? = null
         synchronized(lock) {
@@ -124,14 +136,14 @@ public class TelemetryClient(
                 val start = FaroEvent("session_start", configuration.domain, FaroTimestamp.string(date), null)
                 pending.add(Pending(meta, TelemetryItem.Event(start), date))
             }
-            pending.add(Pending(meta, clean, date))
+            if (clean != null) pending.add(Pending(meta, clean, date))
             trim()
             // Persisted when new, and otherwise at most every 30 s (store writes are cheap but not free)
             if (step.isNew || date - sessionSavedAt >= SESSION_SAVE_INTERVAL_MILLIS) {
                 sessionSavedAt = date
                 toSave = step.session
             }
-            if (remote == RemoteGate.ENABLED) {
+            if (remote == RemoteGate.ENABLED && (clean != null || step.isNew)) {
                 flushIn = when {
                     pending.size >= configuration.maxBatch -> 0
                     flushScheduled -> null

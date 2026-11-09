@@ -119,7 +119,8 @@ disclose that in your privacy policy.
 
 The library does not depend on AndroidX. Call `onStop()` and `onStart()` from the process lifecycle: on stop the queue
 is written to the pending file and then sent (Android gives no grace period); on start the file is removed because the
-queue is still in memory.
+queue is still in memory, and a session starts (`session_start`) when none is running, so sessions count people using
+the app, not only those who hit an error.
 
 ```kotlin
 ProcessLifecycleOwner.get().lifecycle.addObserver(
