@@ -29,6 +29,31 @@ dependencies {
 Until it is on a public repository, publish it locally with `./gradlew publishToMavenLocal` and add `mavenLocal()`.
 Requires JVM 17 bytecode (any Android app on AGP 8) and `java.time`: Android API 26+, or core library desugaring below that.
 
+### Using an unreleased build
+
+To try changes in an app before they are released to Maven Central, either:
+
+- **Composite build (recommended while developing):** point the app's `settings.gradle.kts` at a checkout; Gradle builds
+  the library from source and uses it in place of the published artifact, so edits show up on the next app build:
+
+  ```kotlin
+  // settings.gradle.kts of the app
+  includeBuild("../telemetrykit-android") {
+      dependencySubstitution {
+          substitute(module("app.babyzzz.telemetrykit:telemetrykit")).using(project(":"))
+      }
+  }
+  ```
+
+- **Maven local:** install a build into `~/.m2` under a version of its own, and depend on that version with
+  `mavenLocal()` in the app's repositories:
+
+  ```sh
+  ./gradlew publishToMavenLocal -Pversion=0.2.0-local
+  ```
+
+  Local builds are not signed (only the release job has the signing key).
+
 ## Quick start
 
 ```kotlin

@@ -43,7 +43,11 @@ tasks.test {
 // POM. Credentials and the signing key come from ORG_GRADLE_PROJECT_* variables in the release workflow.
 mavenPublishing {
     publishToMavenCentral()
-    signAllPublications()
+    // Signed only when the release job provides the key, so publishToMavenLocal works without one (Central rejects an
+    // unsigned upload, so a release can never go out unsigned)
+    if (providers.gradleProperty("signingInMemoryKey").isPresent) {
+        signAllPublications()
+    }
     coordinates(group.toString(), "telemetrykit", version.toString())
     configure(KotlinJvm(javadocJar = JavadocJar.Empty(), sourcesJar = true))
     pom {
