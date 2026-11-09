@@ -144,10 +144,16 @@ message, scrubbed and cut at `maxErrorValueLength`. No stack frames are sent. Pa
 exception names readable in minified builds:
 
 ```
--keepnames class * extends java.lang.Throwable
+-keepnames class com.example.** extends java.lang.Throwable
+-keepnames class okhttp3.** extends java.lang.Throwable
 ```
 
-This is a plain JVM jar, so it ships no consumer rules; add the line to your app's `proguard-rules.pro`. The library's
+Name your own packages and the libraries whose errors you report. Platform types (`java.*`, `javax.*`, `android.*`) are
+never renamed. Don't use `class * extends java.lang.Throwable`: if your app bundles a library that re-implements a
+platform package, such as `org.json` (socket.io-client brings it), its exception keeps the platform's name, the
+platform's class (with a different superclass) wins at run time, and the minified app fails verification at start-up.
+
+This is a plain JVM jar, so it ships no consumer rules; add the lines to your app's `proguard-rules.pro`. The library's
 serialization models use explicit `@SerialName`s and kotlinx.serialization's own consumer rules, which R8 picks up
 from the dependency. OkHttp's rules ship with OkHttp.
 
