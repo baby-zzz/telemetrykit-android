@@ -3,7 +3,7 @@ package app.babyzzz.telemetrykit
 /** The library's own name and version, the default for [Configuration.sdk] */
 public object TelemetryKitInfo {
     public const val NAME: String = "telemetrykit-android"
-    public const val VERSION: String = "0.1.0" // x-release-please-version
+    public const val VERSION: String = "0.2.0" // x-release-please-version
 }
 
 /**

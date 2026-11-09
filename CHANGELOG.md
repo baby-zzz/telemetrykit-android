@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0](https://github.com/baby-zzz/telemetrykit-android/compare/telemetrykit-android-v0.1.0...telemetrykit-android-v0.2.0) (2026-11-09)
+
+
+### Features
+
+* TelemetryKit 0.1.0, a minimal Grafana Faro receiver client ([42e5fe9](https://github.com/baby-zzz/telemetrykit-android/commit/42e5fe96d0cc6f69335e25d597e66d2a9d58171e))
+
 ## [0.1.0] - 2026-11-09
 
 ### Added
