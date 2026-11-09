@@ -45,6 +45,7 @@ object TelemetryFixtures {
         backoffMillis: List<Long> = listOf(5_000, 30_000, 120_000, 600_000),
         sessionInactivityMillis: Long = 15 * 60 * 1000L,
         maxErrorValueLength: Int = 500,
+        scrubPolicy: ScrubPolicy = ScrubPolicy.ALL,
         extraScrubParameters: List<String> = emptyList(),
         extraScrubPatterns: List<Regex> = emptyList(),
         errorKind: (Throwable) -> String = { it::class.java.simpleName.ifEmpty { "Throwable" } },
@@ -73,6 +74,7 @@ object TelemetryFixtures {
         sessionInactivityMillis = sessionInactivityMillis,
         maxErrorValueLength = maxErrorValueLength,
         errorKind = errorKind,
+        scrubPolicy = scrubPolicy,
         extraScrubParameters = extraScrubParameters,
         extraScrubPatterns = extraScrubPatterns,
     )

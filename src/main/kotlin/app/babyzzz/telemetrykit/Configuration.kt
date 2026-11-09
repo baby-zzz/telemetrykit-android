@@ -44,6 +44,8 @@ public class Configuration(
     public val sessionInactivityMillis: Long = 15 * 60 * 1000L,
     /** The longest `exceptions[].value` sent; longer values are cut */
     public val maxErrorValueLength: Int = 500,
+    /** Which free strings are scrubbed when an item is queued; every one by default (see [ScrubPolicy]) */
+    public val scrubPolicy: ScrubPolicy = ScrubPolicy.ALL,
     /** Query parameter names to scrub in addition to [TelemetryScrub.DEFAULT_SECRET_PARAMETERS] */
     public val extraScrubParameters: List<String> = emptyList(),
     /** Regexes whose matches are scrubbed in addition to the defaults */

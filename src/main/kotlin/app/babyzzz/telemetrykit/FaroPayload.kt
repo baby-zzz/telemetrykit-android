@@ -147,17 +147,39 @@ public sealed class TelemetryItem {
     public data class Measurement(@SerialName("measurement") val measurement: FaroMeasurement) : TelemetryItem()
 
     /**
-     * The same item with every free string scrubbed ([TelemetryScrub]). Names, types and log messages are the host's own
-     * constants and are sent as they are.
+     * The same item with its free strings scrubbed ([TelemetryScrub]) as [policy] says. [scrub] overrides the policy for
+     * this item: true scrubs every free string, false none; null follows [policy]. Names, types, levels, `where`,
+     * timestamps and meta are never scrubbed, nor are the keys the library sets itself: `where` in an exception's
+     * context and `category` in a log's.
      */
-    public fun scrubbed(scrubber: TelemetryScrub = TelemetryScrub.default): TelemetryItem {
-        fun scrub(text: String) = scrubber.text(text)
-        fun scrubMap(map: Map<String, String>?) = map?.mapValues { scrub(it.value) }
+    public fun scrubbed(
+        scrubber: TelemetryScrub = TelemetryScrub.default,
+        policy: ScrubPolicy = ScrubPolicy.ALL,
+        scrub: Boolean? = null,
+    ): TelemetryItem {
+        val effective = when (scrub) {
+            true -> ScrubPolicy.ALL
+            false -> ScrubPolicy.NONE
+            null -> policy
+        }
+        fun text(value: String) = scrubber.text(value)
+        fun map(on: Boolean, map: Map<String, String>?, keep: String? = null) =
+            if (on) map?.mapValues { if (it.key == keep) it.value else text(it.value) } else map
         return when (this) {
-            is Event -> Event(event.copy(attributes = scrubMap(event.attributes)))
-            is Log -> Log(log.copy(context = scrubMap(log.context)))
-            is Exception -> Exception(exception.copy(value = scrub(exception.value), context = scrubMap(exception.context)))
-            is Measurement -> Measurement(measurement.copy(context = scrubMap(measurement.context)))
+            is Event -> Event(event.copy(attributes = map(effective.eventAttributes, event.attributes)))
+            is Log -> Log(
+                log.copy(
+                    message = if (effective.logMessages) text(log.message) else log.message,
+                    context = map(effective.logContext, log.context, keep = "category"),
+                ),
+            )
+            is Exception -> Exception(
+                exception.copy(
+                    value = if (effective.exceptionValues) text(exception.value) else exception.value,
+                    context = map(effective.exceptionContext, exception.context, keep = "where"),
+                ),
+            )
+            is Measurement -> Measurement(measurement.copy(context = map(effective.measurementContext, measurement.context)))
         }
     }
 }

@@ -125,14 +125,46 @@ This is a plain JVM jar, so it ships no consumer rules; add the line to your app
 serialization models use explicit `@SerialName`s and kotlinx.serialization's own consumer rules, which R8 picks up
 from the dependency. OkHttp's rules ship with OkHttp.
 
+## Configurable scrubbing
+
+By default every free string is scrubbed. `Configuration.scrubPolicy` chooses which, per field; `ScrubPolicy.ALL`
+(the default) scrubs everything and `ScrubPolicy.NONE` nothing:
+
+| `ScrubPolicy` field    | Covers                                   |
+| ---------------------- | ---------------------------------------- |
+| `eventAttributes`      | event attribute values                   |
+| `logMessages`          | log messages                             |
+| `logContext`           | log context values (not `category`)      |
+| `exceptionValues`      | the error `value` (kind and message)     |
+| `exceptionContext`     | exception context values (not `where`)   |
+| `measurementContext`   | measurement context values               |
+
+Every recording call (`event`, `eventThrottled`, `error`, `log`, `measurement`, and `TelemetryClient.record` /
+`recordThrottled`) takes a last optional `scrub: Boolean? = null`: `null` follows the policy, `true` scrubs every free
+string of that item, `false` scrubs none of them. The per-call value always wins over the policy.
+
+```kotlin
+val configuration = Configuration(
+    /* ... */
+    scrubPolicy = ScrubPolicy.ALL.copy(logMessages = false), // my log messages are constants
+    extraScrubParameters = listOf("invite"),                 // still customises the scrubber when it runs
+)
+Telemetry.error(error, where = "checkout", scrub = true)       // scrubbed whatever the policy says
+Telemetry.event("tapped", mapOf("screen" to "home"), scrub = false)
+```
+
+Scrubbing still fails closed whenever it runs. Turning it off is the host app's responsibility.
+
 ## Privacy notes
 
-- Free strings (event attributes, log context, exception value and context, measurement context) pass
-  `TelemetryScrub` before they are queued. Names, types and log messages are sent as they are: they must be constants.
+- Free strings (event attributes, log messages and context, exception value and context, measurement context) pass
+  `TelemetryScrub` before they are queued, unless you turn that off (see "Configurable scrubbing" below). Names, types,
+  levels, `where`, `category`, timestamps and meta are never scrubbed: they must be constants.
 - Default scrub: secret query parameters (`signed`, `ts`, `token`, `access_token`, `refresh_token`, `id_token`, `code`,
   `state`, `session_state`, `key`, `password`, `secret`), e-mail addresses (letters-only TLD, so `sdk@1.2.3` stays),
   `Bearer` tokens and `scheme://user:password@`. If a pattern cannot be built or throws, the text is replaced
   entirely (fail closed).
+- With scrubbing off, values are sent as given: what reaches the collector is then the host app's responsibility.
 - Add your own with `extraScrubParameters` (literal names) and `extraScrubPatterns` (the whole match is replaced).
 - The user is whatever id you pass to `setUser`; the library never reads one.
 - The transport uses its own OkHttp client: no certificate pinning, interceptors, cookies, cache or redirects, so a

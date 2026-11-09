@@ -84,9 +84,9 @@ public object Telemetry {
     // region Signals
 
     /** A named event: [name] and attribute values are constants or enumerated, low-cardinality strings */
-    public fun event(name: String, attributes: Map<String, String> = emptyMap()): Unit = safely {
+    public fun event(name: String, attributes: Map<String, String> = emptyMap(), scrub: Boolean? = null): Unit = safely {
         val client = client ?: return@safely
-        client.record(TelemetryItem.Event(FaroEvent(name, client.configuration.domain, timestamp(client), attributes.ifEmpty { null })))
+        client.record(TelemetryItem.Event(FaroEvent(name, client.configuration.domain, timestamp(client), attributes.ifEmpty { null })), scrub)
     }
 
     /** At most once per [intervalMillis] per [key] (default: the name), with `suppressed`, how many were dropped since */
@@ -95,33 +95,35 @@ public object Telemetry {
         attributes: Map<String, String> = emptyMap(),
         key: String = name,
         intervalMillis: Long = 60_000,
+        scrub: Boolean? = null,
     ): Unit = safely {
         val client = client ?: return@safely
-        client.recordThrottled(FaroEvent(name, client.configuration.domain, timestamp(client), attributes), key, intervalMillis)
+        client.recordThrottled(FaroEvent(name, client.configuration.domain, timestamp(client), attributes), key, intervalMillis, scrub)
     }
 
     /** A measurement (Faro `measurements`): [type] is a constant, [values] numbers */
-    public fun measurement(type: String, values: Map<String, Double>, context: Map<String, String> = emptyMap()): Unit = safely {
+    public fun measurement(type: String, values: Map<String, Double>, context: Map<String, String> = emptyMap(), scrub: Boolean? = null): Unit = safely {
         val client = client ?: return@safely
-        client.record(TelemetryItem.Measurement(FaroMeasurement(type, values, timestamp(client), context.ifEmpty { null })))
+        client.record(TelemetryItem.Measurement(FaroMeasurement(type, values, timestamp(client), context.ifEmpty { null })), scrub)
     }
 
     /**
      * An error the host handled: its type name and [Configuration.errorValue] (no stack frames), with where it happened
      * ([where], a constant such as "checkout"). The message is scrubbed when the item is queued.
      */
-    public fun error(error: Throwable, where: String): Unit = safely {
+    public fun error(error: Throwable, where: String, scrub: Boolean? = null): Unit = safely {
         val client = client ?: return@safely
         val type = error::class.java.simpleName.ifEmpty { "Throwable" }
         client.record(
             TelemetryItem.Exception(FaroException(type, client.configuration.errorValue(error), timestamp(client), mapOf("where" to where))),
+            scrub,
         )
     }
 
     /** A warning or error line: a constant [message], a [category], and optional low-cardinality [context] */
-    public fun log(level: FaroLog.Level, category: String, message: String, context: Map<String, String> = emptyMap()): Unit = safely {
+    public fun log(level: FaroLog.Level, category: String, message: String, context: Map<String, String> = emptyMap(), scrub: Boolean? = null): Unit = safely {
         val client = client ?: return@safely
-        client.record(TelemetryItem.Log(FaroLog(message, level, timestamp(client), mapOf("category" to category) + context)))
+        client.record(TelemetryItem.Log(FaroLog(message, level, timestamp(client), mapOf("category" to category) + context)), scrub)
     }
 
     // endregion

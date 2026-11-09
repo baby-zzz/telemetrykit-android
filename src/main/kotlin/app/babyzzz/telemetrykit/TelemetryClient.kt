@@ -109,9 +109,10 @@ public class TelemetryClient(
 
     // region Recording
 
-    public fun record(item: TelemetryItem) {
+    /** Queues [item]. [scrub] overrides [Configuration.scrubPolicy] for it: true scrubs every free string, false none, null follows the policy */
+    public fun record(item: TelemetryItem, scrub: Boolean? = null) {
         val date = now()
-        val clean = item.scrubbed(configuration.scrub)
+        val clean = item.scrubbed(configuration.scrub, configuration.scrubPolicy, scrub)
         var flushIn: Long? = null
         var toSave: TelemetrySession? = null
         synchronized(lock) {
@@ -145,7 +146,7 @@ public class TelemetryClient(
     /**
      * At most one per [intervalMillis] per [key]; the one sent carries `suppressed`, how many were dropped since. Returns whether it was recorded.
      */
-    public fun recordThrottled(event: FaroEvent, key: String, intervalMillis: Long): Boolean {
+    public fun recordThrottled(event: FaroEvent, key: String, intervalMillis: Long, scrub: Boolean? = null): Boolean {
         val date = now()
         val suppressed = synchronized(lock) {
             val entry = throttled[key]
@@ -156,7 +157,7 @@ public class TelemetryClient(
             throttled[key] = Throttle(date, 0)
             entry?.suppressed ?: 0
         }
-        record(TelemetryItem.Event(event.copy(attributes = (event.attributes ?: emptyMap()) + ("suppressed" to suppressed.toString()))))
+        record(TelemetryItem.Event(event.copy(attributes = (event.attributes ?: emptyMap()) + ("suppressed" to suppressed.toString()))), scrub)
         return true
     }
 
