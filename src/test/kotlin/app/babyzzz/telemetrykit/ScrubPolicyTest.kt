@@ -86,6 +86,15 @@ class ScrubPolicyTest {
     }
 
     @Test
+    fun `a caller category in the context cannot replace the library's`() = runTest {
+        val payload = sent(backgroundScope, ScrubPolicy.ALL) {
+            Telemetry.log(FaroLog.Level.WARN, "real", "m", mapOf("category" to "a@b.com", "k" to "v"))
+        }
+        assertEquals(mapOf("category" to "real", "k" to "v"), payload.logs!!.single().context)
+        assertEquals(mapOf("category" to "c", "k" to "v"), Telemetry.logContext(mapOf("category" to "x", "k" to "v"), "c"))
+    }
+
+    @Test
     fun `only free text changes`() {
         val e = (exception.out(scrub = true) as TelemetryItem.Exception).exception
         assertEquals("ApiError", e.type)

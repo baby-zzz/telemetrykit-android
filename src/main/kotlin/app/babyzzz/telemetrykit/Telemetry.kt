@@ -123,7 +123,7 @@ public object Telemetry {
     /** A warning or error line: a constant [message], a [category], and optional low-cardinality [context] */
     public fun log(level: FaroLog.Level, category: String, message: String, context: Map<String, String> = emptyMap(), scrub: Boolean? = null): Unit = safely {
         val client = client ?: return@safely
-        client.record(TelemetryItem.Log(FaroLog(message, level, timestamp(client), mapOf("category" to category) + context)), scrub)
+        client.record(TelemetryItem.Log(FaroLog(message, level, timestamp(client), logContext(context, category))), scrub)
     }
 
     // endregion
@@ -137,6 +137,9 @@ public object Telemetry {
     public fun onStart(): Unit = safely { client?.foregrounded() }
 
     // endregion
+
+    /** A caller's own `category` key never overrides the library's, which is exempt from scrubbing */
+    internal fun logContext(context: Map<String, String>, category: String): Map<String, String> = context + ("category" to category)
 
     private fun timestamp(client: TelemetryClient) = FaroTimestamp.string(client.nowMillis)
 
