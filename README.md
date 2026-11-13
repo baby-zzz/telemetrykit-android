@@ -115,6 +115,20 @@ Telemetry.setConsent(false)   // drops the queue and the pending file, stores th
 A missing stored value means `consentDefault`: false (opt-in) by default; set it to true for an opt-out design, and
 disclose that in your privacy policy.
 
+### User
+
+```kotlin
+Telemetry.setUser(subject)    // after a sign-in or a restored session: an opaque id
+Telemetry.setUser(null)       // after a sign-out
+```
+
+Items carry the user (Faro `meta.user.id`, Loki `user_id`) from the moment they are recorded. A new id (none before,
+or a different one) records one `user_identified` event in `domain`, carrying that user, so a session whose
+`session_start` was recorded before the sign-in still names its user even when nothing else is recorded afterwards.
+It is recorded like any other item: nothing without consent or with the remote flag off, held in memory while the flag
+is unknown, and it counts as activity, so with no session running it starts one (`session_start`, then
+`user_identified`, both with the user). The same id again, or `null`, records nothing.
+
 ## Lifecycle wiring
 
 The library does not depend on AndroidX. Call `onStop()` and `onStart()` from the process lifecycle: on stop the queue

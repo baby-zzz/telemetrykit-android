@@ -138,11 +138,104 @@ class TelemetryClientTest {
         assertEquals(2, payloads.size)
         assertEquals(listOf("session_start", "before"), payloads[0].events?.map { it.name })
         assertNull(payloads[0].meta.user)
-        assertEquals(listOf("after"), payloads[1].events?.map { it.name })
+        assertEquals(listOf("user_identified", "after"), payloads[1].events?.map { it.name })
         assertEquals("sub-1", payloads[1].meta.user?.id)
         assertTrue(payloads.all { it.meta.session?.id == payloads[0].meta.session?.id })
         assertEquals("android", payloads[0].meta.session?.attributes?.get("platform"))
         assertEquals(0, client.pendingCount)
+    }
+
+    @Test
+    fun `a new user records user_identified with the user in its meta`() = runTest {
+        val transport = RecordingTransport()
+        val client = client(backgroundScope, transport, remote = RemoteGate.ENABLED)
+        client.touchSession()
+        assertTrue(client.flush())
+        client.setUser("sub-1")
+        assertTrue(client.flush())
+        val payload = transport.payloads().last()
+        assertEquals(listOf("user_identified"), payload.events?.map { it.name })
+        assertEquals("android", payload.events?.single()?.domain)
+        assertNull(payload.events?.single()?.attributes)
+        assertEquals("sub-1", payload.meta.user?.id)
+        assertEquals(transport.payloads().first().meta.session?.id, payload.meta.session?.id)
+    }
+
+    @Test
+    fun `the same user again or a sign-out records nothing`() = runTest {
+        val client = client(backgroundScope, remote = RemoteGate.ENABLED)
+        client.setUser("sub-1")
+        assertEquals(2, client.pendingCount) // session_start + user_identified
+        client.setUser("sub-1")
+        assertEquals(2, client.pendingCount)
+        client.setUser(null)
+        assertEquals(2, client.pendingCount)
+        client.setUser("")
+        assertEquals(2, client.pendingCount)
+    }
+
+    @Test
+    fun `another user records user_identified again`() = runTest {
+        val transport = RecordingTransport()
+        val client = client(backgroundScope, transport, remote = RemoteGate.ENABLED)
+        client.setUser("sub-1")
+        client.setUser("sub-2")
+        client.setUser(null)
+        client.setUser("sub-2") // signed out in between: a new user again
+        assertTrue(client.flush())
+        val identified = transport.payloads().flatMap { payload ->
+            payload.events.orEmpty().filter { it.name == "user_identified" }.map { payload.meta.user?.id }
+        }
+        assertEquals(listOf("sub-1", "sub-2", "sub-2"), identified)
+    }
+
+    @Test
+    fun `no user_identified without consent or with the flag off, but later items carry the user`() = runTest {
+        val off = client(backgroundScope, remote = RemoteGate.DISABLED)
+        off.setUser("sub-1")
+        assertEquals(0, off.pendingCount)
+
+        val transport = RecordingTransport()
+        val noConsent = client(backgroundScope, transport, remote = RemoteGate.ENABLED, consent = false)
+        noConsent.setUser("sub-1")
+        assertEquals(0, noConsent.pendingCount)
+        noConsent.setConsent(true)
+        noConsent.record(event("a"))
+        assertTrue(noConsent.flush())
+        val payload = transport.payloads().single()
+        assertEquals(listOf("session_start", "a"), payload.events?.map { it.name })
+        assertEquals("sub-1", payload.meta.user?.id)
+    }
+
+    @Test
+    fun `an unknown flag holds user_identified in memory`() = runTest {
+        val transport = RecordingTransport()
+        val client = client(backgroundScope, transport)
+        client.setUser("sub-1")
+        assertEquals(2, client.pendingCount)
+        assertTrue(client.flush())
+        assertTrue(transport.bodies.isEmpty())
+        client.setRemote(RemoteGate.ENABLED)
+        assertTrue(client.flush())
+        assertEquals(listOf("session_start", "user_identified"), transport.payloads().single().events?.map { it.name })
+    }
+
+    @Test
+    fun `with no session running, session_start and user_identified both carry the user`() = runTest {
+        val transport = RecordingTransport()
+        val clock = FakeClock()
+        val client = client(backgroundScope, transport, remote = RemoteGate.ENABLED, clock = clock)
+        client.touchSession()
+        assertTrue(client.flush())
+        val first = transport.payloads().single().meta.session?.id
+
+        clock.millis += 16 * 60_000 // the session timed out
+        client.setUser("sub-1")
+        assertTrue(client.flush())
+        val payload = transport.payloads().last()
+        assertEquals(listOf("session_start", "user_identified"), payload.events?.map { it.name })
+        assertEquals("sub-1", payload.meta.user?.id)
+        assertFalse(first == payload.meta.session?.id)
     }
 
     @Test

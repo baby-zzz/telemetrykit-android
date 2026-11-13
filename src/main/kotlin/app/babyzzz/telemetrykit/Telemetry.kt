@@ -73,7 +73,7 @@ public object Telemetry {
         )
     }
 
-    /** After a sign-in or a restored session: an opaque user id; null after a sign-out */
+    /** After a sign-in or a restored session: an opaque user id; null after a sign-out. A new id records `user_identified` ([TelemetryClient.setUser]) */
     public fun setUser(subject: String?): Unit = safely { client?.setUser(subject) }
 
     /** The screen in view; a name from the host's own enumeration, never data */

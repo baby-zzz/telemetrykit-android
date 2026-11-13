@@ -96,9 +96,19 @@ public class TelemetryClient(
         if (open) scheduleFlush(0)
     }
 
-    /** An opaque user id after a sign-in, null after a sign-out; items recorded from now on carry it */
+    /**
+     * An opaque user id after a sign-in, null after a sign-out; items recorded from now on carry it. A new id (none
+     * before, or a different one) records `user_identified` with it, so a session that recorded nothing else since the
+     * sign-in still names its user; like any item it counts as activity (it may start a session) and passes the gates.
+     * The same id again, or null, records nothing.
+     */
     public fun setUser(id: String?) {
-        synchronized(lock) { userId = id?.takeIf { it.isNotEmpty() } }
+        val user = id?.takeIf { it.isNotEmpty() }
+        if (user == null) {
+            synchronized(lock) { userId = null }
+        } else {
+            enqueue(null, identify = user)
+        }
     }
 
     public fun setView(name: String?) {
@@ -123,12 +133,24 @@ public class TelemetryClient(
         enqueue(null)
     }
 
-    private fun enqueue(clean: TelemetryItem?) {
+    /**
+     * Queues [item] (null: only the session step). With [identify], the user becomes that id first, in the same lock, and
+     * the item is [USER_IDENTIFIED] (the library's own event, with no free strings, so like `session_start` it is not
+     * scrubbed); nothing is recorded when it is the current user already.
+     */
+    private fun enqueue(item: TelemetryItem?, identify: String? = null) {
         val date = now()
         var flushIn: Long? = null
         var toSave: TelemetrySession? = null
         synchronized(lock) {
+            if (identify != null) {
+                if (identify == userId) return
+                userId = identify
+            }
             if (!consent || remote == RemoteGate.DISABLED) return
+            val clean = item ?: identify?.let {
+                TelemetryItem.Event(FaroEvent(USER_IDENTIFIED, configuration.domain, FaroTimestamp.string(date), null))
+            }
             val step = TelemetrySession.next(session, date, configuration.sessionInactivityMillis)
             session = step.session
             val meta = meta(step.session)
@@ -404,6 +426,8 @@ public class TelemetryClient(
     // endregion
 
     private companion object {
+        /** The event [setUser] records for a new user, in [Configuration.domain] */
+        const val USER_IDENTIFIED = "user_identified"
         const val SESSION_SAVE_INTERVAL_MILLIS = 30_000L
     }
 }
