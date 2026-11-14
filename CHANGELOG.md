@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-11-14
+
+### Added
+- opt-in AndroidX companion telemetrykit-androidx with automatic instrumentation
+
 ## [0.4.0] - 2026-11-13
 
 ### Added

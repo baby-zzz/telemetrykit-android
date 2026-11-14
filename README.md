@@ -21,7 +21,7 @@ From Maven Central:
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("app.babyzzz.telemetrykit:telemetrykit:0.4.0")
+    implementation("app.babyzzz.telemetrykit:telemetrykit:0.5.0")
 }
 ```
 <!-- x-release-please-end -->
@@ -158,7 +158,7 @@ instrumentation; the companion only does what you add it for.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("app.babyzzz.telemetrykit:telemetrykit-androidx:0.4.0")
+    implementation("app.babyzzz.telemetrykit:telemetrykit-androidx:0.5.0")
 }
 ```
 <!-- x-release-please-end -->
