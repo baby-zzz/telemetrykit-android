@@ -8,8 +8,8 @@ happened, the library queues, scrubs, batches and sends it.
 This is an independent project. It is not affiliated with, endorsed by or sponsored by Grafana Labs; "Grafana" and
 "Faro" are used only to describe what the library talks to.
 
-- A plain Kotlin/JVM library: it does not need the Android SDK to build or test, and has no Android dependencies.
-- Dependencies: kotlinx.coroutines, kotlinx.serialization and OkHttp (the transport only).
+- The core (`telemetrykit`) is a plain Kotlin/JVM library: no Android dependencies, and it needs no Android SDK to use. The opt-in companion (`telemetrykit-androidx`, see below) is an Android library; building this repository needs an Android SDK for it.
+- Dependency footprint of the core: kotlinx.coroutines, kotlinx.serialization and OkHttp (the transport only). The companion adds `androidx.lifecycle:lifecycle-process` and nothing else (see below).
 - Every call on the `Telemetry` facade is a cheap enqueue that never throws.
 - Nothing is sent without consent, a "build allows" gate and an enabled remote flag.
 
@@ -26,8 +26,7 @@ dependencies {
 ```
 <!-- x-release-please-end -->
 
-Until it is on a public repository, publish it locally with `./gradlew publishToMavenLocal` and add `mavenLocal()`.
-Requires JVM 17 bytecode (any Android app on AGP 8) and `java.time`: Android API 26+, or core library desugaring below that.
+Releases are signed and published to Maven Central, so `mavenCentral()` in your repositories is all you need. Requires JVM 17 bytecode (any Android app on AGP 8) and `java.time`: Android API 26+, or core library desugaring below that.
 
 ### Using an unreleased build
 
@@ -131,7 +130,7 @@ is unknown, and it counts as activity, so with no session running it starts one 
 
 ## Lifecycle wiring
 
-The library does not depend on AndroidX. Call `onStop()` and `onStart()` from the process lifecycle: on stop the queue
+The core does not depend on AndroidX (the companion's `TelemetryLifecycle.install()` does this for you). Call `onStop()` and `onStart()` from the process lifecycle: on stop the queue
 is written to the pending file and then sent (Android gives no grace period); on start the file is removed because the
 queue is still in memory, and a session starts (`session_start`) when none is running, so sessions count people using
 the app, not only those who hit an error.
@@ -150,6 +149,123 @@ ProcessLifecycleOwner.get().lifecycle.addObserver(
 
 (`androidx.lifecycle:lifecycle-process` in your app.)
 
+## AndroidX companion (telemetrykit-androidx)
+
+An opt-in artifact for Android apps that want the wiring done for them. The core stays SDK-free and does no automatic
+instrumentation; the companion only does what you add it for.
+
+<!-- x-release-please-start-version -->
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("app.babyzzz.telemetrykit:telemetrykit-androidx:0.4.0")
+}
+```
+<!-- x-release-please-end -->
+
+**Dependency footprint.** `telemetrykit-androidx` depends on the core `telemetrykit` (api), `androidx.lifecycle:lifecycle-process`
+(for `ProcessLifecycleOwner`) and the Kotlin stdlib, nothing else. In particular it does **not** depend on Compose:
+Compose UI is `compileOnly`, and tap tracking switches itself on only when the app has Compose on its classpath (every
+Compose-touching class is reached only after a one-time check, so an app without Compose never loads one). The core
+`telemetrykit` depends on kotlinx.coroutines, kotlinx.serialization, OkHttp and the Kotlin stdlib, exactly as before. The
+AAR ships consumer ProGuard rules that keep Activity class names readable (names only, for screen views).
+
+### One call
+
+```kotlin
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Telemetry.start(...)                 // as in "Quick start"
+        TelemetryAndroid.install(this)       // everything below, opt-out per feature
+    }
+}
+```
+
+`TelemetryAndroid.install(application, options)` is idempotent, never throws, and turns on:
+
+| `AutoInstrumentation` | Default | What it does |
+| --- | --- | --- |
+| `lifecycle` | true | `TelemetryLifecycle.install()`: `Telemetry.onStart()` / `onStop()` from the process lifecycle |
+| `exitReasons` | true | `ExitReasons.report(...)` once, on a background thread (API 30+) |
+| `taps` | true | `click` events for taps on the Compose content of every Activity, **without** `Modifier.trackTaps` (needs Compose) |
+| `activityViews` | true | screen views named after the resumed Activity's simple class name; coarse for a single-Activity app, use `TelemetryViews.changed` for finer names (once you call it, the automatic names stop) |
+| `uncaughtExceptions` | true | `TelemetryCrashes.install()` |
+| `tapIds` | `TapIds.Automatic` | what is sent as a tap's `element_id` (below) |
+| `store` | SharedPreferences `telemetrykit` | the `TelemetryStore` for the exit-reason watermark (`SharedPreferencesTelemetryStore`) |
+
+```kotlin
+TelemetryAndroid.install(this, AutoInstrumentation(taps = false, tapIds = TapIds(setOf("save-button"), listOf("tile-*"))))
+```
+
+### The pieces
+
+- `TelemetryLifecycle.install()`: registers a `ProcessLifecycleOwner` observer calling `Telemetry.onStart()` / `onStop()`.
+  Idempotent; call it on the main thread (from another thread it is posted there).
+- `TelemetryViews.changed(name: String?)`: `Telemetry.setView(name)` and, when the name differs from the last, one
+  `view_changed` event (the view is in `meta.view.name`; no attributes). Names must be constants from your own
+  enumeration, never data: they are not scrubbed.
+- `ExitReasons.report(context, store, key = "telemetry_exit_watermark")`: API 30+ only (no-op below). Reads
+  `ActivityManager.getHistoricalProcessExitReasons` (16 newest), and records one `app_exit` event for each newer than the
+  stored timestamp, with `reason` (`crash`, `crash_native`, `anr`, `low_memory`, `excessive_resource_usage`,
+  `user_requested`, `user_stopped`, `signaled`, `exit_self`, `initialization_failure`, `permission_change`,
+  `dependency_died`, `other`, `freezer`, `package_state_change`, `package_updated`, `unknown`) and `importance`
+  (`foreground`, `visible`, `service`, `background`, `cached`, `other`). The first run only stores the newest
+  timestamp (no flood). It blocks on a system call: call it off the main thread. It never reads the trace stream
+  (ANR thread dumps) or the description text.
+- `TelemetryCrashes.install()`: see "Crashes" below.
+- `Modifier.trackTaps(window, ids)`: tap tracking for one Compose root, for windows the automatic tracker cannot see
+  (dialogs, bottom sheets, menus and popups are windows of their own: put it on their content root, with `window` =
+  `"dialog"`, `"sheet"`, `"menu"`), or for apps that prefer explicit wiring. A tap seen both by the automatic tracker and by
+  the modifier is recorded once. It requires Compose UI, which any caller has.
+
+### Taps and privacy
+
+A tap is recognised from pointer events (down and up within the touch slop and before the long-press timeout; nothing is
+consumed, so the UI behaves as without it), then looked up in the unmerged semantics tree: the deepest enabled node with a
+click action, and on it or its ancestors the nearest test tag. One `click` event is recorded with `element_id`,
+`element_tag` (from the role: `button`, `switch`, `checkbox`, `radiobutton`, `tab`, `dropdownlist`, `image`, else
+`clickable`) and `element_class` (the window, a constant). **Label text is never read or sent.**
+
+`element_id` comes from the test tag through `TapIds`:
+
+- `TapIds.Automatic` (default, nothing to maintain): a tag is sent when it looks like a constant id (starts with a letter,
+  then letters, digits and `_ . : -`, at most 64 characters, no run of four or more digits, no `@`, and unchanged by the core's
+  `TelemetryScrub`); anything else is sent as `[masked]`.
+- Strict, `TapIds(literals = setOf("save-button"), templates = listOf("monitor-tile-*"))`: a tag in `literals` is sent as is, a
+  tag matching a template (`*` matches any text) is sent as the template, every other tag is `[masked]`. **Recommended when
+  your tags can embed user data** (a camera name, an e-mail, an id in an interpolated tag): the automatic rule cannot know
+  that `camera-nursery` is a name.
+- A tappable without a tag is sent with an empty `element_id`, so gaps show in the data.
+
+Other privacy rules: no text, no coordinates, no screen contents; the exit-reason `description` and traces are never read;
+crash values are scrubbed; every call is safe and never throws into the app.
+
+### Crashes
+
+`TelemetryCrashes.install()` (on by default in `TelemetryAndroid.install`) chains a default `UncaughtExceptionHandler`. It
+remembers the handler that was installed before it and **always** calls it afterwards, in a `finally`, so Crashlytics (or the
+platform) still receives the crash and the process dies the normal way. Installation order relative to Crashlytics does not
+matter for delivery: whichever installs later calls the earlier one. Install it once (it is idempotent; it never wraps
+itself twice).
+
+It records a Faro exception through the core like `Telemetry.error`: `type` is the class simple name, `value` the core's
+`errorKind` plus the scrubbed message, **no stack frames**; context `where` = `uncaught`, `thread` = `main` or `background`
+(never the thread's name) and `fatal` = `true`. Then the queue is written to the pending file synchronously
+(`TelemetryClient.persist()`): nothing is sent from the dying process, the next start restores the file and sends it. The
+whole handler is bounded to one second, swallows every Throwable of its own, and a crash while recording is not recorded
+again. The core's gates apply (consent, remote flag, a started client). The next start's `app_exit` with reason `crash`
+is an independent second signal of the same crash.
+
+### Unreleased builds
+
+```kotlin
+substitute(module("app.babyzzz.telemetrykit:telemetrykit-androidx")).using(project(":androidx"))
+```
+
+next to the core's `substitute(...)` in a composite build; `./gradlew publishToMavenLocal -Pversion=0.2.0-local` publishes both
+artifacts.
+
 ## Errors and R8 / ProGuard
 
 `Telemetry.error` sends the exception's class simple name as `type` and, as `value`, `errorKind(error)` followed by the
@@ -167,7 +283,7 @@ never renamed. Don't use `class * extends java.lang.Throwable`: if your app bund
 platform package, such as `org.json` (socket.io-client brings it), its exception keeps the platform's name, the
 platform's class (with a different superclass) wins at run time, and the minified app fails verification at start-up.
 
-This is a plain JVM jar, so it ships no consumer rules; add the lines to your app's `proguard-rules.pro`. The library's
+The core is a plain JVM jar, so it ships no consumer rules (the AndroidX companion ships its own); add the lines to your app's `proguard-rules.pro`. The library's
 serialization models use explicit `@SerialName`s and kotlinx.serialization's own consumer rules, which R8 picks up
 from the dependency. OkHttp's rules ship with OkHttp.
 
@@ -257,8 +373,8 @@ the batch, and an exception keeps it.
 ## Build
 
 ```
-./gradlew build
-./gradlew publishToMavenLocal
+./gradlew build                  # core and companion; needs an Android SDK (ANDROID_HOME)
+./gradlew publishToMavenLocal     # both artifacts, unsigned
 ```
 
 ## License

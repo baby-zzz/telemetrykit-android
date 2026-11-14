@@ -6,6 +6,10 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.maven.publish)
+    // For the :androidx subproject (loaded here once so both modules share one plugin classpath)
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
 }
 
 // A plain Kotlin/JVM library: nothing here needs the Android SDK (OkHttp, kotlinx and java.io only), and it runs on
