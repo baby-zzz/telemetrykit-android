@@ -10,7 +10,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 class ExitReasonsTest {
@@ -87,15 +86,13 @@ class ExitReasonsTest {
     }
 
     @Test
-    @Config(sdk = [29])
     fun `below API 30 it does nothing`() {
         val store = InMemoryTelemetryStore()
-        assertEquals(0, ExitReasons.report(ApplicationProvider.getApplicationContext<Application>(), store))
+        assertEquals(0, ExitReasons.report(ApplicationProvider.getApplicationContext<Application>(), store, ExitReasons.DEFAULT_KEY, sdkInt = 29))
         assertNull(store.getString(ExitReasons.DEFAULT_KEY))
     }
 
     @Test
-    @Config(sdk = [34])
     fun `on API 30 and later the platform source is used without throwing`() {
         val store = InMemoryTelemetryStore()
         ExitReasons.report(ApplicationProvider.getApplicationContext<Application>(), store)

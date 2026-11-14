@@ -1,5 +1,6 @@
 package app.babyzzz.telemetrykit.androidx
 
+import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
@@ -32,8 +33,12 @@ public object ExitReasons {
      * Blocking (an IPC to the system): call it off the main thread, e.g. from a background executor, once at start.
      * [TelemetryAndroid.install] does that. Returns how many events were recorded; never throws.
      */
-    public fun report(context: Context, store: TelemetryStore, key: String = DEFAULT_KEY): Int {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return 0
+    public fun report(context: Context, store: TelemetryStore, key: String = DEFAULT_KEY): Int = report(context, store, key, Build.VERSION.SDK_INT)
+
+    /** [report] with the platform level given, so tests cover the pre-API 30 path on one Robolectric runtime */
+    @SuppressLint("NewApi") // the level check is the first line, with sdkInt = Build.VERSION.SDK_INT outside tests
+    internal fun report(context: Context, store: TelemetryStore, key: String, sdkInt: Int): Int {
+        if (sdkInt < Build.VERSION_CODES.R) return 0
         return try {
             val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return 0
             val packageName = context.packageName
